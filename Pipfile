@@ -1,0 +1,18 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple/"
+verify_ssl = true
+
+[dev-packages]
+
+[packages]
+pyinstaller = "*"
+selenium = "*"
+future = "*"
+requests = "*"
+threadpool = "*"
+with = "*"
+pipfile = "*"
+
+[requires]
+python_version = "3.6"
