@@ -49,8 +49,8 @@ def getVideoLength(driver):
 def getVideoName(driver,episode):
     return driver.execute_script("return __NUXT__.state.movie.moiveList[%s].title"%episode)
 
-def getVideoUrl(driver,episode,quality,origin=""):
-    return driver.execute_script("return __NUXT__.state.movie.moiveList[%s].mp4%sUrl%s"%(episode,quality,origin))
+def getVideoUrl(driver,episode,quality,orign=""):
+    return driver.execute_script("return __NUXT__.state.movie.moiveList[%s].mp4%sUrl%s"%(episode,quality,orign))
 
 def getVideoSrt(driver,episode):
     subTitles = {}
@@ -61,20 +61,22 @@ def getVideoSrt(driver,episode):
         subTitles.update({subName:subUrl})
     return subTitles
 
-def getVideoQualities(driver,origin=""):
+def getVideoQualities(driver,orign=""):
     qualities = ["Sd", "Hd", "Shd", "Share"]
-    for quality in qualities:
-        url = getVideoUrl(driver, 0, quality,origin=origin)
-        if url == "": del qualities[qualities.index(quality)]
-    if len(qualities) == 1: qualities = getVideoQualities(driver,origin="Orign")
-    return qualities
+    list_del = []
+    for i in range(len(qualities)):
+        url = getVideoUrl(driver, 0, qualities[i],orign=orign)
+        if url == "": list_del.append(qualities[i])
+    for name in list_del: del qualities[qualities.index(name)]
+    if len(qualities) == 1: [qualities,orign] = getVideoQualities(driver,orign="Orign")
+    return [qualities,orign]
 
-def getAllVideos(driver,quality,iscurrent=False):
+def getAllVideos(driver,quality,iscurrent=False,orign=""):
     videos = []
     for i in range(getVideoLength(driver)):
         if iscurrent: head_text = ""
         else: head_text = "[第%s集]" %(i+1)
-        videos.append({"name":head_text+getVideoName(driver,i),"url":getVideoUrl(driver,i,quality),"srt":getVideoSrt(driver,i)})
+        videos.append({"name":head_text+getVideoName(driver,i),"url":getVideoUrl(driver,i,quality,orign=orign),"srt":getVideoSrt(driver,i)})
     return videos
 
 def downloadVideo(video,path,quality):
@@ -83,7 +85,7 @@ def downloadVideo(video,path,quality):
     for subname,url in video["srt"].items():
         downloadFile(url,path,video["name"]+" - "+subname+"字幕.srt")
 
-def downloadVideos(driver,episode,quality,max_worker):
+def downloadVideos(driver,episode,quality,orign,max_worker):
     # 初始化下载
     if episode == "origin":path = ""
     else:
@@ -98,33 +100,33 @@ def downloadVideos(driver,episode,quality,max_worker):
     # 寻找下载链接进行匹配
     if episode == "origin":
         index = 0
-        qualities = getVideoQualities(driver)
+        qualities = getVideoQualities(driver)[0]
         for qual in qualities:
-            videos = getAllVideos(driver,qual,iscurrent=True)
+            videos = getAllVideos(driver,qual,iscurrent=True,orign=orign)
             for inx, video in enumerate(videos):
                 if video["url"] == getPageUrl(driver):
                     index = inx
                     break
             else: continue
             break
-        videos = getAllVideos(driver, quality,iscurrent=True)
+        videos = getAllVideos(driver, quality,iscurrent=True,orign=orign)
         video = videos[index]
         downloadVideo(video, path, quality)
     else:
-        videos = getAllVideos(driver,quality)
+        videos = getAllVideos(driver,quality,orign=orign)
         if episode == "all":
             func_var = []
             [func_var.append(([video,path,quality],None)) for video in videos]
             requests = threadpool.makeRequests(downloadVideo,func_var)
             [pool.putRequest(req) for req in requests]
         else:
-            video = videos[episode-1]
+            video = videos[int(episode)-1]
             downloadVideo(video,path,quality)
     pool.wait()
     print("已成功下载全部视频及字幕")
 
 def chooseQuality(driver):
-    qualities = getVideoQualities(driver)
+    [qualities,orign] = getVideoQualities(driver)
     del qualities[qualities.index("Share")]
     if len(qualities) != 1:
         notice = "检测到有画质 "
@@ -133,7 +135,7 @@ def chooseQuality(driver):
             notice += "%s.%s "%(index+1,dic[quality])
         index = inputDefault(notice+"请选择(默认:最高画质):",len(qualities)-1)
     else: index = 1
-    return qualities[int(index)-1]
+    return [qualities[int(index)-1],orign]
 
 def main():
     # 获取输入
@@ -150,6 +152,7 @@ def main():
     print("可输入视频页面下载，范例：http://open.163.com/newview/movie/free?pid=MF750DHJV&mid=MF751IN70")
     print("")
     input_url = input("请输入网易公开课视频链接或课程列表：")
+    print("按Enter自动选择默认")
     max_worker = inputDefault("最多同时多少个视频一起下载(默认:5):",5)
     video_type = inputDefault("请选择影片格式 1.字幕与影片分开(某些影片不能分开字幕) 2.获取已合成字幕影片(只有标清) (默认:1):",1)
 
@@ -169,12 +172,12 @@ def main():
     driver.get(videopage)
     if getVideoLength(driver) == 1: episode = "origin"
     else: episode = inputDefault("下载第几集？(全部下载填all,当前页面填origin) (默认:%s):" % default["name"], default["value"])
-    if video_type == "1":quality = chooseQuality(driver)
+    if video_type == "1":[quality,orign] = chooseQuality(driver)
     else: quality = "Share"
 
     # 开始下载
     try:
-        downloadVideos(driver,episode,quality,int(max_worker))
+        downloadVideos(driver,episode,quality,orign,int(max_worker))
     finally:
         driver.quit()
         os.system("pause")
