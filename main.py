@@ -141,7 +141,7 @@ def main():
     print("注意：软件为网易公开课下载器，并非网易云课堂！！")
     print("软件支持多线程，可分别下载视频及字幕，可选择画质(倘若原视频有)")
     print("作者: JamesHoi")
-    print("Github项目: ")
+    print("Github项目: https://github.com/JamesHoi/Open163-Downloader")
     print("链接范例：")
     print("可输入课程链接下载，范例：http://open.163.com/newview/movie/courseintro?newurl=%2Fspecial%2Fcuvocw%2Fputaojiuwenhua.html&1447983787771")
     print("可输入旧版课程链接，范例：http://open.163.com/special/sp/singlevariablecalculus.html")
