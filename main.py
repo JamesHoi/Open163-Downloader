@@ -116,7 +116,7 @@ def downloadVideos(driver,episode,quality,orign,max_worker):
 
         # 将需要下载组成一个列表
         video_list = []
-        if episode == "all": parts = "1-%s"%getVideoLength(driver)
+        if episode == "all": parts = ["1-%s"%getVideoLength(driver)]
         else: parts = episode.split(",")
         for part in parts:
             heads = part.split("-")
