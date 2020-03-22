@@ -90,7 +90,6 @@ def downloadVideos(driver,episode,quality,orign,max_worker):
     if episode == "origin":path = ""
     else:
         course_name = getCourseName(driver)
-        print("课程: %s"%course_name)
         if not os.path.exists(course_name):
             os.mkdir(course_name)
         path = course_name + "/"
@@ -114,14 +113,22 @@ def downloadVideos(driver,episode,quality,orign,max_worker):
         downloadVideo(video, path, quality)
     else:
         videos = getAllVideos(driver,quality,orign=orign)
-        if episode == "all":
-            func_var = []
-            [func_var.append(([video,path,quality],None)) for video in videos]
-            requests = threadpool.makeRequests(downloadVideo,func_var)
-            [pool.putRequest(req) for req in requests]
-        else:
-            video = videos[int(episode)-1]
-            downloadVideo(video,path,quality)
+
+        # 将需要下载组成一个列表
+        video_list = []
+        if episode == "all": parts = "1-%s"%getVideoLength(driver)
+        else: parts = episode.split(",")
+        for part in parts:
+            heads = part.split("-")
+            if len(heads) ==2: video_list.extend(list(range(int(heads[0]),int(heads[1])+1)))
+            else: video_list.append(int(heads[0]))
+
+        # 新建线程池
+        func_var = []
+        for inx, video in enumerate(videos):
+            if inx+1 in video_list:func_var.append(([video, path, quality], None))
+        requests = threadpool.makeRequests(downloadVideo, func_var)
+        [pool.putRequest(req) for req in requests]
     pool.wait()
     print("已成功下载全部视频及字幕")
 
@@ -141,7 +148,7 @@ def main():
     # 获取输入
     print("软件介绍：")
     print("注意：软件为网易公开课下载器，并非网易云课堂！！")
-    print("软件支持多线程，可分别下载视频及字幕，可选择画质(倘若原视频有)")
+    print("软件支持多线程，可分别下载视频及字幕，可选择画质(倘若原视频有)。支持分集下载")
     print("作者: JamesHoi")
     print("Github项目: https://github.com/JamesHoi/Open163-Downloader")
     print("")
@@ -152,7 +159,7 @@ def main():
     print("可输入视频页面下载，范例：http://open.163.com/newview/movie/free?pid=MF750DHJV&mid=MF751IN70")
     print("")
     input_url = input("请输入网易公开课视频链接或课程列表：")
-    print("按Enter自动选择默认")
+    print("[按Enter自动选择默认]")
     max_worker = inputDefault("最多同时多少个视频一起下载(默认:5):",5)
     video_type = inputDefault("请选择影片格式 1.字幕与影片分开(某些影片不能分开字幕) 2.获取已合成字幕影片(只有标清) (默认:1):",1)
 
@@ -168,12 +175,22 @@ def main():
         os.system("pause")
         sys.exit(0)
 
-    # 询问下载
+    # 打开视频网址
     driver.get(videopage)
-    if getVideoLength(driver) == 1: episode = "origin"
-    else: episode = inputDefault("下载第几集？(全部下载填all,当前页面填origin) (默认:%s):" % default["name"], default["value"])
+    driver.implicitly_wait(3)
+
+    # 询问下载
+    print("")
+    length = getVideoLength(driver)
+    if length == 1: episode = "origin"
+    else:
+        course_name = getCourseName(driver)
+        print("课程: %s"%course_name)
+        print("检测到一共有%s集"%length)
+        print("[支持分段下载，用逗号隔开，范例：1,3-9,12-15]")
+        episode = inputDefault("下载第几集？(全部下载填all,当前页面填origin) (默认:%s):" % default["name"], default["value"])
     if video_type == "1":[quality,orign] = chooseQuality(driver)
-    else: quality = "Share"
+    else: [quality,orign] = ["Share",""]
 
     # 开始下载
     try:
