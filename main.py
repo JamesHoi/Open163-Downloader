@@ -176,6 +176,7 @@ def main():
         sys.exit(0)
 
     # 打开视频网址
+    print("[正在获取课程信息，可能会稍微有点慢]")
     driver.get(videopage)
     driver.implicitly_wait(3)
 
