@@ -2,11 +2,13 @@
 from selenium import webdriver
 from downloader import downloadFile
 import sys,os,threadpool
+from webdriver_manager.chrome import ChromeDriverManager
 
 def program_dir():
     if hasattr(sys, 'frozen'):
         dir = sys._MEIPASS + "/"
     else:
+        # 代码项目路径
         dir = "D:/WorkSpace/Python/Open163-Downloader/"
     return dir
 
@@ -20,7 +22,7 @@ def gen_driver():
     opt.add_argument('--disable-gpu')
     opt.add_argument("--headless")
     opt.add_experimental_option('excludeSwitches', ['enable-logging'])
-    driver = webdriver.Chrome(options=opt, executable_path=program_dir()+'Resource/chromedriver.exe')
+    driver = webdriver.Chrome(options=opt,executable_path=program_dir()+'Resource/chromedriver.exe')
     return driver
 
 def getOldVersion(url):
