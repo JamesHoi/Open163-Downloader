@@ -1,12 +1,6 @@
 # Open163-Downloader
  网易公开课下载器，支持多线程，可分别下载视频及字幕  
 
-## 注意！
-网易公开课已不支持电脑观看视频，此软件已无法使用
-https://www.zhihu.com/question/401103254
-
-但我还是找到了能下载视频的方法，我有时间我会修改软件的
-
 ## 下载
 [Github发布页](https://github.com/JamesHoi/Open163-Downloader/releases)  
 [微云下载](https://share.weiyun.com/5uRDiTm)
