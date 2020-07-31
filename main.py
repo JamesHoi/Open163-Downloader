@@ -22,7 +22,7 @@ def gen_driver():
     opt.add_argument('--disable-gpu')
     opt.add_argument("--headless")
     opt.add_experimental_option('excludeSwitches', ['enable-logging'])
-    driver = webdriver.Chrome(options=opt,executable_path=program_dir()+'Resource/chromedriver.exe')
+    driver = webdriver.Chrome(options=opt,executable_path=ChromeDriverManager.install())
     return driver
 
 def getOldVersion(url):
