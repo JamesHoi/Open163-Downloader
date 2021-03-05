@@ -1,150 +1,55 @@
-#coding:utf-8
-from selenium import webdriver
-from downloader import downloadFile
-import sys,os,threadpool
-from webdriver_manager.chrome import ChromeDriverManager
+import requests
+import json
+import sys
+import os
+import threadpool
+from urllib import parse
+from common import download_file, _to_chinese4
 
-def program_dir():
-    if hasattr(sys, 'frozen'):
-        dir = sys._MEIPASS + "/"
-    else:
-        # 代码项目路径
-        dir = "D:/WorkSpace/Python/Open163-Downloader/"
-    return dir
-
-def inputDefault(statement,default):
+def input_default(statement,default):
     text = input(statement)
     if text == "": text = str(default)
     return text
 
-def gen_driver():
-    opt = webdriver.ChromeOptions()
-    opt.add_argument('--disable-gpu')
-    opt.add_argument("--headless")
-    opt.add_experimental_option('excludeSwitches', ['enable-logging'])
-    driver = webdriver.Chrome(options=opt,executable_path=ChromeDriverManager.install())
-    return driver
 
-def getOldVersion(url):
-    html = url.split("%2F")[3]
-    return "http://open.163.com/special/sp/%s"%html
+def get_url_query(url):
+    result = parse.urlparse(url)
+    query = parse.parse_qs(result.query)
+    if "pid" not in query or "mid" not in query or result.netloc != 'open.163.com': return {}
+    query["pid"] = query["pid"][0]
+    query["mid"] = query["mid"][0]
+    return query
 
-def getVideoPage(driver,url):
-    driver.get(url)
-    driver.implicitly_wait(5)
-    video_url = driver.find_element_by_class_name("u-even").find_element_by_tag_name("a").get_attribute("href")
-    return video_url
 
-def getCourseName(driver):
-    return driver.find_element_by_class_name("t-container__linkhover").text
+def get_current_episode(data,pid):
+    for index, video in enumerate(data["videoList"]):
+        if video["plid"] == pid:
+            return index
 
-def getPageUrl(driver):
-    return driver.find_element_by_tag_name("video").get_attribute("src")
 
-def seeMore(driver):
-    u_seemore = driver.find_elements_by_class_name("u-seemore")
-    if len(u_seemore):u_seemore[0].click()
-
-def getVideoLength(driver):
-    return driver.execute_script("return __NUXT__.state.movie.moiveList.length;")
-
-def getVideoName(driver,episode):
-    return driver.execute_script("return __NUXT__.state.movie.moiveList[%s].title"%episode)
-
-def getVideoUrl(driver,episode,quality,orign=""):
-    return driver.execute_script("return __NUXT__.state.movie.moiveList[%s].mp4%sUrl%s"%(episode,quality,orign))
-
-def getVideoSrt(driver,episode):
-    subTitles = {}
-    subLength = driver.execute_script("return __NUXT__.state.movie.moiveList[%s].subList.length"%episode)
-    for i in range(subLength):
-        subName = driver.execute_script("return __NUXT__.state.movie.moiveList[%s].subList[%s].subName"%(episode,i))
-        subUrl = driver.execute_script("return __NUXT__.state.movie.moiveList[%s].subList[%s].subUrl"%(episode,i))
-        subTitles.update({subName:subUrl})
-    return subTitles
-
-def getVideoQualities(driver,orign=""):
-    qualities = ["Sd", "Hd", "Shd", "Share"]
-    list_del = []
-    for i in range(len(qualities)):
-        url = getVideoUrl(driver, 0, qualities[i],orign=orign)
-        if url == "": list_del.append(qualities[i])
-    for name in list_del: del qualities[qualities.index(name)]
-    if len(qualities) == 1: [qualities,orign] = getVideoQualities(driver,orign="Orign")
-    return [qualities,orign]
-
-def getAllVideos(driver,quality,iscurrent=False,orign=""):
-    videos = []
-    for i in range(getVideoLength(driver)):
-        if iscurrent: head_text = ""
-        else: head_text = "[第%s集]" %(i+1)
-        videos.append({"name":head_text+getVideoName(driver,i),"url":getVideoUrl(driver,i,quality,orign=orign),"srt":getVideoSrt(driver,i)})
-    return videos
-
-def downloadVideo(video,path,quality):
+def download_video(video,path,quality,key,index,no_head):
     dic = {"Sd":"标清","Hd":"高清","Shd":"超清","Share":"标清（包含字幕）"}
-    downloadFile(video["url"],path,video["name"]+" - "+dic[quality]+".mp4")
-    for subname,url in video["srt"].items():
-        downloadFile(url,path,video["name"]+" - "+subname+"字幕.srt")
+    head = _to_chinese4(index+1)+"、" if not no_head else ""
+    download_file(video[key],path,head+video["title"]+" - "+dic[quality]+".mp4")
+    for sub in video["subList"]:
+        filename = head+video["title"]+" - "+sub["subName"]+"字幕.srt"
+        download_file(sub["subUrl"],path,filename)
 
-def downloadVideos(driver,episode,quality,orign,max_worker):
-    # 初始化下载
-    if episode == "origin":path = ""
-    else:
-        course_name = getCourseName(driver)
-        if not os.path.exists(course_name):
-            os.mkdir(course_name)
-        path = course_name + "/"
-    print("[若下载速度太快，可能会看不到下载信息]")
-    pool = threadpool.ThreadPool(max_worker)
 
-    # 寻找下载链接进行匹配
-    if episode == "origin":
-        index = 0
-        qualities = getVideoQualities(driver)[0]
-        for qual in qualities:
-            videos = getAllVideos(driver,qual,iscurrent=True,orign=orign)
-            for inx, video in enumerate(videos):
-                if video["url"] == getPageUrl(driver):
-                    index = inx
-                    break
-            else: continue
-            break
-        videos = getAllVideos(driver, quality,iscurrent=True,orign=orign)
-        video = videos[index]
-        downloadVideo(video, path, quality)
-    else:
-        videos = getAllVideos(driver,quality,orign=orign)
+def download_videos(data, episode, quality, path, max_workers):
+    base_key = "mp4"+quality+"Url"
+    if data["videoList"][episode[0]][base_key] == "": base_key += "Orign"
+    pool = threadpool.ThreadPool(max_workers)
 
-        # 将需要下载组成一个列表
-        video_list = []
-        if episode == "all": parts = ["1-%s"%getVideoLength(driver)]
-        else: parts = episode.split(",")
-        for part in parts:
-            heads = part.split("-")
-            if len(heads) ==2: video_list.extend(list(range(int(heads[0]),int(heads[1])+1)))
-            else: video_list.append(int(heads[0]))
-
-        # 新建线程池
-        func_var = []
-        for inx, video in enumerate(videos):
-            if inx+1 in video_list:func_var.append(([video, path, quality], None))
-        requests = threadpool.makeRequests(downloadVideo, func_var)
-        [pool.putRequest(req) for req in requests]
+    # 新建线程池
+    func_var = []
+    for inx, video in enumerate(data["videoList"]):
+        if inx in episode:func_var.append(([video, path, quality, base_key, inx, len(episode)==1], None))
+    reqs = threadpool.makeRequests(download_video, func_var)
+    [pool.putRequest(req) for req in reqs]
     pool.wait()
     print("已成功下载全部视频及字幕")
 
-def chooseQuality(driver):
-    [qualities,orign] = getVideoQualities(driver)
-    del qualities[qualities.index("Share")]
-    if len(qualities) != 1:
-        notice = "检测到有画质 "
-        dic = {"Sd":"标清","Hd":"高清","Shd":"超清"}
-        for index, quality in enumerate(qualities):
-            notice += "%s.%s "%(index+1,dic[quality])
-        index = inputDefault(notice+"请选择(默认:最高画质):",len(qualities)-1)
-    else: index = 1
-    return [qualities[int(index)-1],orign]
 
 def main():
     # 获取输入
@@ -154,53 +59,65 @@ def main():
     print("作者: JamesHoi")
     print("Github项目: https://github.com/JamesHoi/Open163-Downloader")
     print("")
-    print("链接范例：")
-    print("可输入课程链接下载，范例：")
-    print("http://open.163.com/newview/movie/courseintro?newurl=%2Fspecial%2Fcuvocw%2Fputaojiuwenhua.html&1447983787771")
-    print("可输入旧版课程链接，范例：http://open.163.com/special/sp/singlevariablecalculus.html")
-    print("可输入视频页面下载，范例：http://open.163.com/newview/movie/free?pid=MF750DHJV&mid=MF751IN70")
-    print("")
-    input_url = input("请输入网易公开课视频链接或课程列表：")
+    print("请输入视频页面链接下载")
+    print("链接范例一：https://open.163.com/newview/movie/free?pid=MF750DHJV&mid=MF751IN70")
+    print("链接范例二：https://open.163.com/newview/movie/free?pid=MA32VG4SA&mid=MA35IIC76")
+    while True:
+        input_url = input("请输入网易公开课视频链接或课程列表：")
+        query = get_url_query(input_url)
+        if "pid" in query:
+            print("[正在获取数据，请等待]")
+            print("")
+            r = requests.get("https://c.open.163.com/open/mob/movie/list.do?plid=" + query["pid"])
+            content = json.loads(r.content)
+            data = content["data"]
+            if content["code"] == 200: break
+        print("请输入正确的链接，参考范例链接 https://open.163.com/newview/movie/free?pid=MA32VG4SA&mid=MA35IIC76")
+
+    # 初始化下载选择
+    course_name = data["title"]
+    print("检测到视频为："+ course_name)
+    video_num = len(data["videoList"])
+    if video_num != 1: print("检测到一共有%s集" %video_num)
     print("[按Enter自动选择默认]")
-    max_worker = inputDefault("最多同时多少个视频一起下载(默认:5):",5)
-    video_type = inputDefault("请选择影片格式 1.字幕与影片分开(某些影片不能分开字幕) 2.获取已合成字幕影片(只有标清) (默认:1):",1)
-
-    # 初始化网页
-    website = input_url.split("/")[3]
-    type = input_url.split("/")[5].split("?")[0]
-    driver = gen_driver()
-    if type == "free": [videopage,default] = [input_url,{"name":"当前页面","value":"origin"}]
-    elif type == "courseintro": [videopage,default] = [getVideoPage(driver,getOldVersion(input_url)),{"name":"下载全部","value":"all"}]
-    elif website == "special": [videopage,default] = [getVideoPage(driver,input_url),{"name":"下载全部","value":"all"}]
+    if video_num != 1: print("[支持分集下载，用逗号隔开，范例：1,3-9,12-15]")
+    current_episode = get_current_episode(data, query["pid"])
+    episode = input_default("下载第几集？(全部下载填all,当前视频填current) (默认:current):","current") if video_num != 1 else [0]
+    if episode == "all": episode = range(video_num)
+    elif episode == "current": episode = [current_episode]
+    elif type(episode) == str:
+        parts = episode.split(","); episode = []
+        for part in parts:
+            heads = part.split("-")
+            if len(heads) ==2: episode.extend(list(range(int(heads[0])-1,int(heads[1]))))
+            else: episode.append(int(heads[0])-1)
+    max_worker = int(input_default("最多同时多少个视频一起下载(默认:5):",5)) if (video_num != 1 and episode != [current_episode]) else 1
+    video_type = input_default("请选择影片格式 1.字幕与影片分开(某些影片不能分开字幕) 2.获取已合成字幕影片(只有标清) (默认:1):",1)
+    if int(video_type) == 2: quality = "Share"
     else:
-        print("无法识别链接网页，无法下载")
-        os.system("pause")
-        sys.exit(0)
-
-    # 打开视频网址
-    print("[正在获取课程信息，可能会稍微有点慢]")
-    driver.get(videopage)
-    driver.implicitly_wait(3)
-
-    # 询问下载
-    print("")
-    length = getVideoLength(driver)
-    if length == 1: episode = "origin"
-    else:
-        course_name = getCourseName(driver)
-        print("课程: %s"%course_name)
-        print("检测到一共有%s集"%length)
-        print("[支持分段下载，用逗号隔开，范例：1,3-9,12-15]")
-        episode = inputDefault("下载第几集？(全部下载填all,当前页面填origin) (默认:%s):" % default["name"], default["value"])
-    if video_type == "1":[quality,orign] = chooseQuality(driver)
-    else: [quality,orign] = ["Share",""]
+        notice = "检测到有画质 "; qualities = []; video = data["videoList"][current_episode-1]
+        dic = {"Sd":"标清","Hd":"高清","Shd":"超清"}
+        for key in dic:
+            if video["mp4"+key+"Url"] != "" or video["mp4"+key+"UrlOrign"] != "":
+                qualities.append(key)
+        for index, quality in enumerate(qualities):
+            notice += "%s.%s "%(index+1,dic[quality])
+        index = input_default(notice+"请选择(默认:最高画质):",len(qualities))
+        quality = qualities[int(index)-1]
 
     # 开始下载
-    try:
-        downloadVideos(driver,episode,quality,orign,int(max_worker))
-    finally:
-        driver.quit()
-        os.system("pause")
+    if episode == [0]: path = ""
+    else:
+        if not os.path.exists(course_name):
+            os.mkdir(course_name)
+        path = course_name + "/"
+        with open(path + "课程介绍.txt", "wb+") as f:
+            f.write(data["description"].encode())
+    print("")
+    print("[开始下载视频]")
+    print("[若下载速度太快，可能会看不到下载信息]")
+    download_videos(data, episode, quality, path, max_worker)
+
 
 if __name__ == '__main__':
     sys.exit(main())
