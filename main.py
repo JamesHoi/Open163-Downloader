@@ -117,7 +117,7 @@ def main():
     print("[开始下载视频]")
     print("[若下载速度太快，可能会看不到下载信息]")
     download_videos(data, episode, quality, path, max_worker)
-
+    os.system("pause")
 
 if __name__ == '__main__':
     sys.exit(main())
