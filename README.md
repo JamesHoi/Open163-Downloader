@@ -1,6 +1,12 @@
 # Open163-Downloader
  网易公开课下载器，支持多线程，可分别下载视频及字幕  
 
+## TODO
+- [ ] 修复bugs
+- [ ] 打包成linux版本使用  
+
+欢迎在issue里提出反馈和提议，有时间我会修改的。
+
 ## 下载
 [Github发布页](https://github.com/JamesHoi/Open163-Downloader/releases)  
 [微云下载](https://share.weiyun.com/oYfwIX8F)
